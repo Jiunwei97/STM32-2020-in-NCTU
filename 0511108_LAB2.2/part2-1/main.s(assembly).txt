@@ -1,0 +1,131 @@
+.syntax unified
+.cpu cortex-m4
+.thumb
+
+.data
+	leds: .byte 0
+.text
+	.global main
+	.equ X, 0x530
+	.equ Y, 0x100
+	.equ X_press, 0x280
+	.equ Y_press, 0x100
+    .include "../src/pin.s"  // import GPIO constants
+main:
+	bl GPIO_initial
+	//LED
+	mov r8, #0
+	movs r1, #0b1
+	ldr r0, =leds
+	strb r1, [r0]
+	ldr r1, =GPIOB_ODR
+	b Loop
+Loop:
+	//Write the display pattern into leds variable
+	mov r7, #0
+	bl DisplayLED
+	bl Delay
+	cmp r8, #1
+	beq raise
+	cmp r8, #-1
+	beq descent
+	cmp r8, #0
+	beq first_round
+raise:
+	lsl r2, 1
+	and r2, #15
+	cmp r2, #0
+	itt eq
+	moveq r2, #0b1100
+	moveq r8, #-1
+	str r2, [r0]
+	b Loop
+descent:
+	lsr r2, 1
+	cmp r2, #0
+	itt eq
+	moveq r2, #0b11
+	moveq r8, #1
+	str r2, [r0]
+
+	b Loop
+first_round:
+	mov r2, #0b11
+	str r2, [r0]
+	mov r8, #1
+	b Loop
+DisplayLED:
+	//TODO: Display LED by leds
+	ldr r3, [r0]
+	lsl r3, 3
+	eor r3, #0xFFFFFFFF
+	str r3, [r1]
+	bx lr
+Delay:
+	//TODO: Write a delay 1 sec function
+	ldr r9, =GPIOC_IDR
+	movs r4, #1
+	lsl r4, #13
+	ldr r5, =X
+L1: ldr r6, =Y
+L2:	ldr r3, [r9]
+	cmp r3, r4
+	bne Delay_press
+	subs r6, #1
+	cmp r6, #0
+	bne L2
+	subs r5, #1
+	cmp r5, #0
+	bne L1
+	bx lr
+GPIO_initial:
+	movs r0, #0x6
+	ldr r1, =RCC_AHB2ENR
+	str r0, [r1]
+   // Set PB3-PB5 to output mode
+	movs r0, #0x1540
+	ldr r1, =GPIOB_MODER
+	ldr r2, [r1]
+	movs r3, #0xFFFFD57F
+	and r2, r3
+	orrs r2, r2, r0
+	str r2, [r1]
+
+	movs r0, #0x800
+	ldr r1, =GPIOB_OSPEEDR
+	strh r0, [r1]
+
+	ldr r1, =GPIOC_MODER
+	ldr r0, [r1]
+	ldr r2, =#0xF3FFFFFF
+	and r0,r2
+	str r0, [r1]
+
+	bx lr
+do_pushed:
+	ldr r1, =GPIOB_ODR
+	ldr r9, =GPIOC_IDR
+	ldr r3, [r9]
+	movs r4, #1
+	lsl r4, #13
+	cmp r3, r4
+	bne Delay_press
+	b do_pushed
+Delay_press:
+	//TODO: Write a delay 1 sec function
+	ldr r5, =X_press //0x280
+L1_press:
+	ldr r6, =Y_press // 0x100
+L2_press:
+	subs r6, #1
+	cmp r6, #0
+	bne L2_press
+	subs r5, #1
+	cmp r5, #0
+	bne L1_press
+	cmp r7, #0
+	ite eq
+	moveq r7, #1
+	bne Loop
+	b do_pushed
+
